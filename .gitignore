@@ -1,0 +1,72 @@
+# Datasets & fichiers lourds
+*.zip
+*.tar
+*.tar.gz
+*.tar.bz2
+*.7z
+*.rar
+
+# Données ML (pickle, numpy, etc.)
+*.pkl
+*.pickle
+*.npy
+*.npz
+*.h5
+*.hdf5
+*.parquet
+*.feather
+*.arrow
+
+# Modèles entraînés
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.safetensors
+*.onnx
+*.pb
+*.tflite
+*.weights
+
+# Dossiers de données
+data/
+datasets/
+Project/train/
+Project/val/
+Project/test_public/
+
+# Outputs Jupyter (garder les notebooks mais pas les outputs lourds)
+.ipynb_checkpoints/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environnements virtuels
+venv/
+env/
+.env/
+.venv/
+
+# Logs & runs
+*.log
+runs/
+logs/
+wandb/
+mlruns/
+lightning_logs/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
