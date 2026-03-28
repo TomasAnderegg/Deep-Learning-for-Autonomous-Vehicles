@@ -29,7 +29,7 @@
 *.weights
 
 # Dossiers de données
-data/
+# data/
 datasets/
 Project/train/
 Project/val/
