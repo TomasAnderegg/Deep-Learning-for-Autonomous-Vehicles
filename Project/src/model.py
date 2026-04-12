@@ -1,0 +1,93 @@
+import torch
+import torch.nn as nn
+import torchvision.models as models
+
+
+class DrivingPlanner(nn.Module):
+    """
+    LTF-inspired architecture:
+    ResNet-34 (image) + Command Embedding + History GRU → Fusion MLP → GRU Decoder → Trajectory (60, 3)
+    """
+    def __init__(
+        self,
+        num_commands=3,
+        command_embed_dim=64,
+        history_input_dim=8,   # 3 (x,y,h) + 5 (dynamics) si include_dynamics=True, sinon 3
+        history_hidden=128,
+        fusion_dim=512,
+        gru_hidden=512,
+        output_steps=60,
+        output_dim=3,
+    ):
+        super().__init__()
+        self.output_steps = output_steps
+        self.output_dim = output_dim
+
+        # ── 1. Image encoder : ResNet-34 pretrained ──────────────────
+        resnet = models.resnet34(weights=models.ResNet34_Weights.IMAGENET1K_V1)
+        self.image_encoder = nn.Sequential(*list(resnet.children())[:-2])
+        self.image_pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.image_proj = nn.Sequential(
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+        )
+
+        # ── 2. Driving command embedding ──────────────────────────────
+        self.command_embed = nn.Embedding(num_commands, command_embed_dim)
+
+        # ── 3. History encoder : GRU ──────────────────────────────────
+        # history_input_dim = 3 sans dynamics, 8 avec
+        self.history_gru = nn.GRU(
+            input_size=history_input_dim,
+            hidden_size=history_hidden,
+            num_layers=2,
+            batch_first=True,
+            dropout=0.1,
+        )
+
+        # ── 4. Fusion MLP ─────────────────────────────────────────────
+        # 256 (image) + 64 (cmd) + 128 (history) = 448
+        self.fusion = nn.Sequential(
+            nn.Linear(256 + command_embed_dim + history_hidden, fusion_dim),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(fusion_dim, gru_hidden),
+            nn.ReLU(),
+        )
+
+        # ── 5. Trajectory decoder : GRU autorégressif ─────────────────
+        self.decoder_cell = nn.GRUCell(output_dim, gru_hidden)
+        self.output_head = nn.Linear(gru_hidden, output_dim)
+
+    def forward(self, image, command, history):
+        B = image.size(0)
+
+        # Image
+        feat = self.image_encoder(image)          # (B, 512, h, w)
+        feat = self.image_pool(feat).flatten(1)   # (B, 512)
+        img_feat = self.image_proj(feat)          # (B, 256)
+
+        # Command
+        cmd_feat = self.command_embed(command)    # (B, 64)
+
+        # History
+        _, h_n = self.history_gru(history)        # h_n: (2, B, 128)
+        hist_feat = h_n[-1]                       # (B, 128) — dernière couche GRU
+
+        # Fusion
+        combined = torch.cat([img_feat, cmd_feat, hist_feat], dim=1)  # (B, 448)
+        hidden = self.fusion(combined)            # (B, 512)
+
+        # Décodage autorégressif — on part du dernier point historique (x, y, heading)
+        # On prend les 3 premières dims au cas où include_dynamics=True (8 dims)
+        current = history[:, -1, :self.output_dim]   # (B, 3)
+        outputs = []
+
+        for _ in range(self.output_steps):
+            hidden = self.decoder_cell(current, hidden)  # (B, 512)
+            delta = self.output_head(hidden)             # (B, 3)
+            current = current + delta                    # prédiction différentielle
+            outputs.append(current.unsqueeze(1))
+
+        return torch.cat(outputs, dim=1)  # (B, 60, 3)
