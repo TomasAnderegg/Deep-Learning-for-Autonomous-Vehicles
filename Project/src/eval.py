@@ -61,7 +61,7 @@ def generate_submission(args):
     with open(output_path, 'w', newline='') as f:
         writer = csv.writer(f)
         # Header
-        header = ['id'] + [f'{coord}_{t}' for t in range(60) for coord in ['x', 'y']]
+        header = ['id'] + [f'{coord}_{t}' for t in range(1, 61) for coord in ['x', 'y']]
         writer.writerow(header)
         # Rows
         for i, traj in enumerate(all_preds):
@@ -78,3 +78,5 @@ if __name__ == '__main__':
     parser.add_argument('--output_dir', type=str, default='../submissions')
     args = parser.parse_args()
     generate_submission(args)
+
+    # python src/eval.py --data_dir data --ckpt_dir checkpoints --output_dir submissions

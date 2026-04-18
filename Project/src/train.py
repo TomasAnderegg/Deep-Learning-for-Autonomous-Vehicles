@@ -145,3 +145,5 @@ if __name__ == '__main__':
                         choices=['online', 'offline', 'disabled'])
     args = parser.parse_args()
     train(args)
+
+    # python src/train.py --data_dir data --ckpt_dir checkpoints --epochs 30 --batch_size 8 --lr 1e-3 --num_workers 2 --augment_prob 0.5 --include_dynamics --wandb_mode disabled
