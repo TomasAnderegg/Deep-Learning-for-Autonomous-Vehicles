@@ -37,11 +37,11 @@ class DrivingPlanner(nn.Module):
         self.output_dim = output_dim
 
         # ── 1. Image encoder : ResNet-34 pretrained ──────────────────
-        resnet = models.resnet34(weights=models.ResNet34_Weights.IMAGENET1K_V1)
+        resnet = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
         self.image_encoder = nn.Sequential(*list(resnet.children())[:-2])
         self.image_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.image_proj = nn.Sequential(
-            nn.Linear(512, 256),
+            nn.Linear(2048, 256),
             nn.ReLU(),
             nn.Dropout(0.1),
         )
