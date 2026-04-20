@@ -17,7 +17,7 @@ mkdir -p logs checkpoints submissions
 /home/garate/miniconda3/envs/nanofm/bin/python src/train.py \
     --data_dir         data \
     --ckpt_dir         checkpoints \
-    --epochs           60 \
+    --epochs           200 \
     --batch_size       32 \
     --lr               1e-3 \
     --num_workers      4 \

@@ -20,7 +20,7 @@ def generate_submission(args):
     saved_args = ckpt.get('args', {})
     include_dynamics = saved_args.get('include_dynamics', False)
 
-    history_dim = 8 if include_dynamics else 3
+    history_dim = 9 if include_dynamics else 4
     model = DrivingPlanner(history_input_dim=history_dim).to(device)
     model.load_state_dict(ckpt['model_state'])
     model.eval()

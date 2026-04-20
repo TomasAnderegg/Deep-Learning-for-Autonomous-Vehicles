@@ -102,7 +102,7 @@ def train(args):
             optimizer.zero_grad()
             pred = model(image, command, history)   # (B, 60, 3)
             weights = torch.linspace(1.0, 2.0, 60).to(device)  # timesteps lointains pèsent plus
-            loss = (criterion(pred, future) * weights[None, :, None]).mean()
+            loss = (criterion(pred[..., :2], future[..., :2]) * weights[None, :, None]).mean()
 
             # loss = criterion(pred, future)
             loss.backward()
