@@ -1,7 +1,20 @@
 import torch
 import torch.nn as nn
 import torchvision.models as models
+import torch.nn.functional as F
 
+
+class TemporalAttn(nn.Module):
+    def __init__(self, hidden_size):
+        super().__init__()
+        self.attn = nn.Linear(hidden_size, 1)
+
+    def forward(self, gru_outputs):
+        # gru_outputs: (B, 21, 128)
+        scores = self.attn(gru_outputs).squeeze(-1)   # (B, 21)
+        weights = F.softmax(scores, dim=1).unsqueeze(1)  # (B, 1, 21)
+        context = torch.bmm(weights, gru_outputs).squeeze(1)  # (B, 128)
+        return context
 
 class DrivingPlanner(nn.Module):
     """
@@ -12,7 +25,7 @@ class DrivingPlanner(nn.Module):
         self,
         num_commands=3,
         command_embed_dim=64,
-        history_input_dim=8,   # 3 (x,y,h) + 5 (dynamics) si include_dynamics=True, sinon 3
+        history_input_dim=4,   # 4 (x,y,sin, cos) + 9 (dynamics) si include_dynamics=True, sinon 3
         history_hidden=128,
         fusion_dim=512,
         gru_hidden=512,
@@ -60,6 +73,9 @@ class DrivingPlanner(nn.Module):
         self.decoder_cell = nn.GRUCell(output_dim, gru_hidden)
         self.output_head = nn.Linear(gru_hidden, output_dim)
 
+        # --6. Temporal Attention---------------------------------------
+        self.history_attn = TemporalAttn(history_hidden)
+
     def forward(self, image, command, history):
         B = image.size(0)
 
@@ -72,8 +88,8 @@ class DrivingPlanner(nn.Module):
         cmd_feat = self.command_embed(command)    # (B, 64)
 
         # History
-        _, h_n = self.history_gru(history)        # h_n: (2, B, 128)
-        hist_feat = h_n[-1]                       # (B, 128) — dernière couche GRU
+        gru_out, _ = self.history_gru(history)   # (B, 21, 128)
+        hist_feat = self.history_attn(gru_out)   # (B, 128)
 
         # Fusion
         combined = torch.cat([img_feat, cmd_feat, hist_feat], dim=1)  # (B, 448)

@@ -85,6 +85,11 @@ class AugmentedNuPlanDataset(Dataset):
         # Extract camera, history and future features
         camera = torch.FloatTensor(data['camera']).permute(2, 0, 1) / 255.0
         history = torch.FloatTensor(data['sdc_history_feature'])
+        xy      = history[:, :2]       # (21, 2)
+        heading = history[:, 2]        # (21,)
+        history = torch.cat([xy, torch.sin(heading).unsqueeze(1), torch.cos(heading).unsqueeze(1)], dim=1)
+
+
         # depth = torch.FloatTensor(data['depth']).permute(2, 0, 1) / 255.0
         # semantic_label = torch.LongTensor(data['semantic_label'])
         if not self.test:
@@ -99,10 +104,10 @@ class AugmentedNuPlanDataset(Dataset):
             camera = torch.flip(camera, dims=[2]) # Flip horizontally
             # depth = torch.flip(depth, dims=[2])
             # semantic_label = torch.flip(semantic_label, dims=[1])
-            history[:, 1] = -history[:, 1] # Flip y-coordinates
-            history[:, 2] = -history[:, 2] # Flip heading-coordinates
+            history[:, 0] = -history[:, 0] # x → -x
+            history[:, 2] = -history[:, 2] #  sin(h) → -sin(h)
             if not self.test:
-                future[:, 1] = -future[:, 1]
+                future[:, 0] = -future[:, 0]
                 future[:, 2] = -future[:, 2]
             if cmd == 1: cmd = 2        # Quand on flippe l'image, tout ce qui est a gauche/droite doit etre inverse
             elif cmd == 2: cmd = 1 
@@ -215,11 +220,45 @@ def main():
     data_dir = "."
     NuplanDataLoader(data_dir=data_dir)
     data_paths = get_data_paths(data_dir=data_dir)
+    #Inpect pkl file 
+    inspect_pkl(data_paths['train'])
+
+    check_class_distribution(data_paths['train'], split_name="train")
+    check_class_distribution(data_paths['val'],   split_name="val")
+
 
     # Visualize samples from the training set
     dataset = AugmentedNuPlanDataset(data_paths['train'], test=False, include_dynamics=True, augment_prob=0.5)
     visualize_samples(dataset, num_samples=4)
+
+def inspect_pkl(data_path):
+    f = [f for f in os.listdir(data_path) if f.endswith('.pkl')][0]
+    with open(os.path.join(data_path, f), 'rb') as fp:
+        data = pickle.load(fp)
     
+    print("future shape:", data['sdc_future_feature'].shape)
+    print("future[0]:", data['sdc_future_feature'][0])
+
+    print("Clés:", list(data.keys()))
+    print("driving_command:", data['driving_command'], "| type:", type(data['driving_command']))
+
+def check_class_distribution(data_path, split_name=""):
+    label_names = {0: 'forward', 1: 'left', 2: 'right'}
+    counts = {0: 0, 1: 0, 2: 0}
+
+    files = [f for f in os.listdir(data_path) if f.endswith('.pkl')]
+    for f in files:
+        with open(os.path.join(data_path, f), 'rb') as fp:
+            data = pickle.load(fp)
+        counts[COMMAND_MAP[data['driving_command']]] += 1
+    
+    total = sum(counts.values())
+    print(f"\n--- {split_name} ({total} samples) ---")
+    for k, v in counts.items():
+        print(f"  {label_names[k]:>8}: {v:5d} ({100*v/total:.1f}%)")
+
+    return counts
+
 if __name__ == "__main__":
     main()
     

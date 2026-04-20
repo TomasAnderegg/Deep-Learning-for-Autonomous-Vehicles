@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=dlav-m1
-#SBATCH --output=../logs/train_%j.log
-#SBATCH --error=../logs/train_%j.err
+#SBATCH --output=logs/train_%j.log
+#SBATCH --error=logs/train_%j.err
 #SBATCH --gres=gpu:1
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=4
@@ -9,13 +9,14 @@
 
 set -e
 module load gcc python cuda
-cd "$(dirname "$0")"
+export PATH="/home/garate/miniconda3/envs/nanofm/bin:$PATH"
+cd /home/garate/Project
 
-mkdir -p ../logs ../checkpoints ../submissions
+mkdir -p logs checkpoints submissions
 
-python src/train.py \
-    --data_dir         ../data \
-    --ckpt_dir         ../checkpoints \
+/home/garate/miniconda3/envs/nanofm/bin/python src/train.py \
+    --data_dir         data \
+    --ckpt_dir         checkpoints \
     --epochs           60 \
     --batch_size       32 \
     --lr               1e-3 \

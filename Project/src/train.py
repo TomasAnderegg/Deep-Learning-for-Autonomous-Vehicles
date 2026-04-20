@@ -76,7 +76,7 @@ def train(args):
     print(f"Train: {len(train_ds)} | Val: {len(val_ds)}")
 
     # Model
-    history_dim = 8 if args.include_dynamics else 3
+    history_dim = 9 if args.include_dynamics else 4
     model = DrivingPlanner(history_input_dim=history_dim).to(device)
     print(f"Params: {sum(p.numel() for p in model.parameters()):,}")
 
@@ -101,7 +101,10 @@ def train(args):
 
             optimizer.zero_grad()
             pred = model(image, command, history)   # (B, 60, 3)
-            loss = criterion(pred, future)
+            weights = torch.linspace(1.0, 2.0, 60).to(device)  # timesteps lointains pèsent plus
+            loss = (criterion(pred, future) * weights[None, :, None]).mean()
+
+            # loss = criterion(pred, future)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
