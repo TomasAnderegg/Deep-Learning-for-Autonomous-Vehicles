@@ -37,13 +37,13 @@ class DrivingPlanner(nn.Module):
         self.output_dim = output_dim
 
         # ── 1. Image encoder : ResNet-34 pretrained ──────────────────
-        resnet = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
+        resnet = models.resnet34(weights=models.ResNet34_Weights.IMAGENET1K_V1)
         self.image_encoder = nn.Sequential(*list(resnet.children())[:-2])
         self.image_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.image_proj = nn.Sequential(
-            nn.Linear(2048, 256),
+            nn.Linear(512, 256),
             nn.ReLU(),
-            nn.Dropout(0.1),
+            nn.Dropout(0.2),
         )
 
         # ── 2. Driving command embedding ──────────────────────────────
@@ -56,7 +56,7 @@ class DrivingPlanner(nn.Module):
             hidden_size=history_hidden,
             num_layers=2,
             batch_first=True,
-            dropout=0.1,
+            dropout=0.2,
         )
 
         # ── 4. Fusion MLP ─────────────────────────────────────────────
@@ -64,7 +64,7 @@ class DrivingPlanner(nn.Module):
         self.fusion = nn.Sequential(
             nn.Linear(256 + command_embed_dim + history_hidden, fusion_dim),
             nn.ReLU(),
-            nn.Dropout(0.1),
+            nn.Dropout(0.2),
             nn.Linear(fusion_dim, gru_hidden),
             nn.ReLU(),
         )
