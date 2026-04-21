@@ -2,7 +2,6 @@ import os
 import sys
 import argparse
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -83,7 +82,6 @@ def train(args):
     # Optimizer + Scheduler
     optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
-    criterion = nn.L1Loss()
 
     best_val_ade = float('inf')
     os.makedirs(args.ckpt_dir, exist_ok=True)
@@ -101,8 +99,10 @@ def train(args):
 
             optimizer.zero_grad()
             pred = model(image, command, history)   # (B, 60, 3)
-            weights = torch.linspace(1.0, 2.0, 60).to(device)  # timesteps lointains pèsent plus
-            loss = (criterion(pred[..., :2], future[..., :2]) * weights[None, :, None]).mean()
+            weights = torch.linspace(1.0, 2.0, 60).to(device)
+            # ADE loss: norme euclidienne (dx²+dy²)^0.5 — même métrique que la validation
+            dist = torch.norm(pred[..., :2] - future[..., :2], dim=-1)  # (B, 60)
+            loss = (dist * weights[None, :]).mean()
 
             # loss = criterion(pred, future)
             loss.backward()

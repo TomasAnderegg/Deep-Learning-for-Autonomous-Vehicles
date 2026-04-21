@@ -99,7 +99,8 @@ class AugmentedNuPlanDataset(Dataset):
         camera = self.normalize(camera)  
         
         # Apply random flip to camera and history features
-        if random.random() < self.augment_prob:
+        if random.random() < self.augment_prob*0.5:
+            history[:, :2] += torch.randn_like(history[:, :2]) * 0.05  # bruit position
             camera = self.augmentations(camera)
             camera = torch.flip(camera, dims=[2]) # Flip horizontally
             # depth = torch.flip(depth, dims=[2])

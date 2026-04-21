@@ -53,16 +53,16 @@ class DrivingPlanner(nn.Module):
         # history_input_dim = 3 sans dynamics, 8 avec
         self.history_gru = nn.GRU(
             input_size=history_input_dim,
-            hidden_size=history_hidden,
+            hidden_size= 256, #history_hidden,
             num_layers=2,
             batch_first=True,
             dropout=0.2,
         )
 
         # ── 4. Fusion MLP ─────────────────────────────────────────────
-        # 256 (image) + 64 (cmd) + 128 (history) = 448
+        # 256 (image) + 64 (cmd) + 256 (history) = 448
         self.fusion = nn.Sequential(
-            nn.Linear(256 + command_embed_dim + history_hidden, fusion_dim),
+            nn.Linear(256 + command_embed_dim + 256, fusion_dim),
             nn.ReLU(),
             nn.Dropout(0.2),
             nn.Linear(fusion_dim, gru_hidden),
@@ -74,7 +74,7 @@ class DrivingPlanner(nn.Module):
         self.output_head = nn.Linear(gru_hidden, output_dim)
 
         # --6. Temporal Attention---------------------------------------
-        self.history_attn = TemporalAttn(history_hidden)
+        self.history_attn = TemporalAttn(256)#history_hidden)
 
     def forward(self, image, command, history):
         B = image.size(0)
