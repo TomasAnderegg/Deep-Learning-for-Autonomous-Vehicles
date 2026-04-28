@@ -42,7 +42,7 @@ def validate(model, loader, device):
 def train(args):
     wandb.init(
         project="dlav-m1",
-        entity="tjga-98-epfl", #USer Wandb
+        entity="tjga-98-epfl",
         config=vars(args),
         mode=args.wandb_mode,
     )
@@ -62,7 +62,7 @@ def train(args):
         paths['val'],
         test=False,
         include_dynamics=args.include_dynamics,
-        augment_prob=0.0,   # pas d'augmentation en val
+        augment_prob=0.0,
     )
     train_loader = DataLoader(
         train_ds, batch_size=args.batch_size,
@@ -100,11 +100,9 @@ def train(args):
             optimizer.zero_grad()
             pred = model(image, command, history)   # (B, 60, 3)
             weights = torch.linspace(1.0, 2.0, 60).to(device)
-            # ADE loss: norme euclidienne (dx²+dy²)^0.5 — même métrique que la validation
             dist = torch.norm(pred[..., :2] - future[..., :2], dim=-1)  # (B, 60)
             loss = (dist * weights[None, :]).mean()
 
-            # loss = criterion(pred, future)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
