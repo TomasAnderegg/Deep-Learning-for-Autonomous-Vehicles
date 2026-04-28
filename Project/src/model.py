@@ -107,3 +107,112 @@ class DrivingPlanner(nn.Module):
             outputs.append(current.unsqueeze(1))
 
         return torch.cat(outputs, dim=1)  # (B, 60, 3)
+
+
+# === MULTIMODAL VERSION ===
+class MultiModalDrivingPlanner(nn.Module):
+    """
+    Extension multimodale de DrivingPlanner.
+    Même encodeur (image + command + history), décodeur modifié pour prédire K trajectoires en parallèle.
+    hidden partagé entre les K modes : chaque tête voit le même contexte mais prédit des deltas différents.
+    """
+    def __init__(
+        self,
+        num_commands=3,
+        command_embed_dim=64,
+        history_input_dim=4,
+        history_hidden=128,
+        fusion_dim=512,
+        gru_hidden=512,
+        output_steps=60,
+        output_dim=3,
+        num_modes=5,            # === MODIFIED : K modes ===
+    ):
+        super().__init__()
+        self.output_steps = output_steps
+        self.output_dim = output_dim
+        self.num_modes = num_modes
+
+        # ── Encodeurs identiques à DrivingPlanner ────────────────────────────
+        resnet = models.resnet34(weights=models.ResNet34_Weights.IMAGENET1K_V1)
+        self.image_encoder = nn.Sequential(*list(resnet.children())[:-2])
+        self.image_pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.image_proj = nn.Sequential(
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+        )
+        self.command_embed = nn.Embedding(num_commands, command_embed_dim)
+        self.history_gru = nn.GRU(
+            input_size=history_input_dim,
+            hidden_size=256,
+            num_layers=2,
+            batch_first=True,
+            dropout=0.2,
+        )
+        self.history_attn = TemporalAttn(256)
+        self.fusion = nn.Sequential(
+            nn.Linear(256 + command_embed_dim + 256, fusion_dim),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(fusion_dim, gru_hidden),
+            nn.ReLU(),
+        )
+
+        # === MODIFIED : décodeur multimodal ══════════════════════════════════
+        self.decoder_cell = nn.GRUCell(output_dim, gru_hidden)
+
+        # Une tête qui prédit K*3 deltas d'un coup (K modes en parallèle)
+        self.traj_head = nn.Linear(gru_hidden, num_modes * output_dim)
+
+        # Une tête qui prédit la probabilité de chaque mode
+        self.prob_head = nn.Linear(gru_hidden, num_modes)
+        # ═════════════════════════════════════════════════════════════════════
+
+    def forward(self, image, command, history):
+        B = image.size(0)
+        K = self.num_modes
+
+        # ── Encodeurs (identiques) ────────────────────────────────────────────
+        feat = self.image_encoder(image)
+        feat = self.image_pool(feat).flatten(1)
+        img_feat = self.image_proj(feat)                          # (B, 256)
+
+        cmd_feat = self.command_embed(command)                    # (B, 64)
+
+        gru_out, _ = self.history_gru(history)                   # (B, 21, 256)
+        hist_feat = self.history_attn(gru_out)                   # (B, 256)
+
+        combined = torch.cat([img_feat, cmd_feat, hist_feat], dim=1)
+        hidden = self.fusion(combined)                            # (B, 512)
+
+        # === MODIFIED : décodage autorégressif multimodal ====================
+        # Point de départ : dernier point historique, dupliqué pour les K modes
+        current_single = history[:, -1, :self.output_dim]        # (B, 3)
+        current = current_single.unsqueeze(1).expand(B, K, self.output_dim).clone()  # (B, K, 3)
+
+        outputs = []
+
+        for _ in range(self.output_steps):
+            # hidden partagé : un seul GRUCell pour tous les modes
+            hidden = self.decoder_cell(current_single, hidden)    # (B, 512)
+
+            # K deltas prédits en parallèle depuis le même hidden
+            deltas = self.traj_head(hidden)                       # (B, K*3)
+            deltas = deltas.view(B, K, self.output_dim)           # (B, K, 3)
+
+            # Mise à jour de chaque mode indépendamment
+            current = current + deltas                            # (B, K, 3)
+
+            # On met à jour current_single avec la moyenne des modes pour le prochain GRUCell
+            current_single = current.mean(dim=1)                  # (B, 3)
+
+            outputs.append(current.unsqueeze(2))                  # (B, K, 1, 3)
+
+        trajectories = torch.cat(outputs, dim=2)                  # (B, K, 60, 3)
+
+        # Probabilités des modes (softmax appliqué ici)
+        probs = F.softmax(self.prob_head(hidden), dim=-1)         # (B, K)
+        # =====================================================================
+
+        return trajectories, probs
