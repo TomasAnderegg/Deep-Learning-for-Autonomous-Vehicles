@@ -5,6 +5,7 @@
 End-to-end planning for autonomous driving aims to directly map raw sensor inputs to driving decisions, removing the need for complex modular pipelines. This paradigm simplifies system design while enabling better adaptability and robustness in dynamic environments.
 
 In this project, we implement an end-to-end deep learning model that predicts the **future trajectory of a self-driving vehicle** over 60 time steps. The model leverages visual input, high-level driving commands, and past motion history to generate accurate and temporally consistent trajectory predictions.
+
 ---
 
 ## 2. Project Objective
