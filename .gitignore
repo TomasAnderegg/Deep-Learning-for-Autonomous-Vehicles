@@ -29,11 +29,22 @@
 *.weights
 
 # Dossiers de données
-# data/
 datasets/
+Project/data/
 Project/train/
 Project/val/
 Project/test_public/
+Project/test_public/
+
+# Données brutes à la racine de Project (splitées hors data/)
+train/
+val/
+test_public/
+
+# Submissions (fichiers CSV générés)
+Project/submissions/
+submissions/
+*.csv
 
 # Outputs Jupyter (garder les notebooks mais pas les outputs lourds)
 .ipynb_checkpoints/
