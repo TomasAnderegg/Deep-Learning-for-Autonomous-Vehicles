@@ -84,9 +84,20 @@ def train(args):
     scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
 
     best_val_ade = float('inf')
+    start_epoch = 1
     os.makedirs(args.ckpt_dir, exist_ok=True)
 
-    for epoch in range(1, args.epochs + 1):
+    if args.resume:
+        ckpt_path = os.path.join(args.ckpt_dir, 'best.pth')
+        ckpt = torch.load(ckpt_path, map_location=device)
+        model.load_state_dict(ckpt['model_state'])
+        optimizer.load_state_dict(ckpt['optimizer_state'])
+        scheduler.load_state_dict(ckpt['scheduler_state'])
+        best_val_ade = ckpt['val_ade']
+        start_epoch = ckpt['epoch'] + 1
+        print(f"Resumed from epoch {ckpt['epoch']} | Best ADE: {best_val_ade:.4f}")
+
+    for epoch in range(start_epoch, args.epochs + 1):
         model.train()
         train_loss = 0.0
 
@@ -120,13 +131,23 @@ def train(args):
 
         if val_ade < best_val_ade:
             best_val_ade = val_ade
-            torch.save({
-                'epoch': epoch,
-                'model_state': model.state_dict(),
-                'val_ade': val_ade,
-                'args': vars(args),
-            }, os.path.join(args.ckpt_dir, 'best.pth'))
-            print(f"  ✓ Saved best (ADE={best_val_ade:.4f})")
+            ckpt_path = os.path.join(args.ckpt_dir, 'best.pth')
+            tmp_path = ckpt_path + '.tmp'
+            try:
+                torch.save({
+                    'epoch': epoch,
+                    'model_state': model.state_dict(),
+                    'optimizer_state': optimizer.state_dict(),
+                    'scheduler_state': scheduler.state_dict(),
+                    'val_ade': val_ade,
+                    'args': vars(args),
+                }, tmp_path)
+                os.replace(tmp_path, ckpt_path)
+                print(f"  ✓ Saved best (ADE={best_val_ade:.4f})")
+            except Exception as e:
+                print(f"  ✗ Save failed (ADE={best_val_ade:.4f}): {e}")
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
 
     print(f"\nBest Val ADE: {best_val_ade:.4f}")
     wandb.finish()
@@ -142,6 +163,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers',      type=int,   default=4)
     parser.add_argument('--augment_prob',     type=float, default=0.5)
     parser.add_argument('--include_dynamics', action='store_true')
+    parser.add_argument('--resume',           action='store_true')
     parser.add_argument('--wandb_mode',       type=str,   default='online',
                         choices=['online', 'offline', 'disabled'])
     args = parser.parse_args()
